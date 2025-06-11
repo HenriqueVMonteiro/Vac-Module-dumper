@@ -11,6 +11,7 @@
 #include <fstream>
 #include <format>
 #include <assert.h>
+#include <thread>
 
 #include "util.h"
 #include "icekey.h"
@@ -24,7 +25,6 @@
 #pragma comment(lib,"libMinHook.x86.lib")
 #endif
 
-#define DUMPED_FOLDER    L"C:\\Lumina\\"
 
 struct ModuleRange {
 	uintptr_t base;      // m_pModuleBase   ou   HMODULE
@@ -57,7 +57,17 @@ std::unordered_set<uint32_t> g_Dumped;
 std::unordered_set<uint32_t> g_SavedKeys;     // txt já gravado
 std::mutex g_Mtx;
 
-std::string dumpPath = "C:\\Lumina";
+static const std::filesystem::path g_dumpPath = L"C:\\Lumina";
+
+class MinHookGuard {
+public:
+    MinHookGuard() : initialized(MH_Initialize() == MH_OK) {}
+    ~MinHookGuard() { if (initialized) MH_Uninitialize(); }
+    bool ok() const { return initialized; }
+private:
+    bool initialized;
+};
+static MinHookGuard g_MinHook;
 char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, char flags)
 {
 	bool bOriginalReturn = oGetEntryPoint(pModule, flags);
@@ -107,8 +117,8 @@ VacModuleResult_t __fastcall hkCall(void* pThis, void* pEDX, unsigned int unHash
 			printf(" -> SKey        = %02X %02X %02X %02X %02X %02X %02X %02X\n", vKeys[8], vKeys[9], vKeys[10], vKeys[11], vKeys[12], vKeys[13], vKeys[14], vKeys[15]);
 			g_IceKeys.insert(std::pair<unsigned int, std::array<unsigned char, 16>>(unHash, std::move(vKeys)));
 
-			std::filesystem::create_directories("C:\\Lumina");
-			std::ofstream f(std::format("C:\\Lumina\\icekey_{:08X}.txt", unHash));
+                        std::filesystem::create_directories(g_dumpPath);
+                        std::ofstream f(std::filesystem::path(g_dumpPath) / std::format(L"icekey_{:08X}.txt", unHash));
 			for (int i = 0; i < 8; ++i)
 				f << std::format("{:02X}{}", vKeys[i], i == 7 ? "" : " ");
 
@@ -141,9 +151,8 @@ HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
 	DWORD   dwFlags)
 {
 	// 1) Se parecer vac_xxxx.tmp, copie imediatamente
-	if (wcsstr(lpLibFileName, L".tmp"))
-	{
-		wchar_t dst[MAX_PATH];
+        if (wcsstr(lpLibFileName, L".tmp"))
+        {
 
 		// tenta achar '_' antes da extensão; se não houver, usa o próprio nome
 		const wchar_t* fname = wcsrchr(lpLibFileName, L'\\');
@@ -161,12 +170,11 @@ HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
 			crc = std::wcstoul(tmp, nullptr, 16);
 		}
 
-		swprintf_s(dst, L"C:\\Lumina\\vac_%08X.dll", crc);
-
-		CreateDirectoryW(L"C:\\Lumina", nullptr);
-		if (!CopyFileW(lpLibFileName, dst, FALSE))
-			wprintf(L"[!] CopyFile falhou (%u) %ls → %ls\n",
-				GetLastError(), lpLibFileName, dst);
+                auto dstPath = std::filesystem::path(g_dumpPath) / std::format(L"vac_{:08X}.dll", crc);
+                std::filesystem::create_directories(g_dumpPath);
+                if (!CopyFileW(lpLibFileName, dstPath.c_str(), FALSE))
+                        wprintf(L"[!] CopyFile falhou (%u) %ls → %ls\n",
+                                GetLastError(), lpLibFileName, dstPath.c_str());
 	}
 
 	// 2) chama a API original
@@ -174,44 +182,43 @@ HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
 }
 
 
-DWORD WINAPI InitHook(LPVOID)
+void InitHook()
 {
-	// @xref: pModule->m_pModule == NULL
-	uintptr_t entry = util::get_sig("steamservice.dll", "55 8B EC 83 EC 24 53 56 8B 75 08 8B D9");
+        if (!g_MinHook.ok())
+                return;
+        // @xref: pModule->m_pModule == NULL
+        uintptr_t entry = util::get_sig("steamservice.dll", "55 8B EC 83 EC 24 53 56 8B 75 08 8B D9");
 
-	if (!entry)
-	{
-		std::cout << "[!] entry não encontrado!\n";
-		return 1;
-	}
+        if (!entry)
+        {
+                std::cout << "[!] entry não encontrado!\n";
+                return;
+        }
 	std::cout << "[*] entry encontrado em: 0x" << std::hex << entry << std::endl;
 
 	// @xref: pModule->m_nLastResult != k_ECallResultNone
 	uintptr_t call_hook = util::get_sig("steamservice.dll", "55 8B EC 6A ? 68 ? ? ? ? 68 ? ? ? ? 64 A1 ? ? ? ? 50 64 89 25 ? ? ? ? 83 EC ? 53 56 57 89 65 ? 8B F9");
 
-	if (!call_hook)
-	{
-		std::cout << "[!] call_hook não encontrado!\n";
-		return 1;
-	}
+        if (!call_hook)
+        {
+                std::cout << "[!] call_hook não encontrado!\n";
+                return;
+        }
 	std::cout << "[*] call_hook encontrado em: 0x" << std::hex << call_hook << std::endl;
 
 	//auto target_func = util::resolve_relative_address(reinterpret_cast<uint8_t*>(call_instr), 1, 5);
 
-	if (MH_Initialize() != MH_OK)
-		return 1;
+        if (MH_CreateHook(reinterpret_cast<void*>(entry), &hkGetEntryPoint, reinterpret_cast<void**>(&oGetEntryPoint)) != MH_OK)
+                return;
 
-	if (MH_CreateHook(reinterpret_cast<void*>(entry), &hkGetEntryPoint, reinterpret_cast<void**>(&oGetEntryPoint)) != MH_OK)
-		return 1;
+        if (MH_EnableHook(reinterpret_cast<void*>(entry)) != MH_OK)
+                return;
 
-	if (MH_EnableHook(reinterpret_cast<void*>(entry)) != MH_OK)
-		return 1;
+        if (MH_CreateHook(reinterpret_cast<void*>(call_hook), &hkCall, reinterpret_cast<void**>(&oCall)) != MH_OK)
+                return;
 
-	if (MH_CreateHook(reinterpret_cast<void*>(call_hook), &hkCall, reinterpret_cast<void**>(&oCall)) != MH_OK)
-		return 1;
-
-	if (MH_EnableHook(reinterpret_cast<void*>(call_hook)) != MH_OK)
-		return 1;
+        if (MH_EnableHook(reinterpret_cast<void*>(call_hook)) != MH_OK)
+                return;
 
 	MH_CreateHookApi(L"kernel32", "LoadLibraryExW", &LoadLibraryExWHk, (void**)&oLoadLibraryExW);
 	MH_EnableHook(MH_ALL_HOOKS);
@@ -224,7 +231,6 @@ DWORD WINAPI InitHook(LPVOID)
 
 	std::cout << "[+] Hook instalado: CClientModuleManager::LoadModule @ 0x"
 		<< std::hex << call_hook << std::endl;
-	return 0;
 }
 
 void OpenDebugConsole()
@@ -265,11 +271,10 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	case DLL_PROCESS_ATTACH:
 	{
 		DisableThreadLibraryCalls(hModule);
-		CreateThread(nullptr, 0, [](LPVOID) -> DWORD {
-			OpenDebugConsole();
-			InitHook(nullptr);
-			return 0;
-			}, nullptr, 0, nullptr);
+                std::thread([] {
+                        OpenDebugConsole();
+                        InitHook();
+                }).detach();
 		break;
 	}
     case DLL_THREAD_ATTACH:

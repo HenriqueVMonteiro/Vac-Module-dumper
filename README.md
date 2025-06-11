@@ -23,7 +23,7 @@ Exemplo simplificado de uso:
 // injete a DLL no processo steam.exe ( admin )
 ```
 
-O diretório de saída pode ser alterado modificando a variável `dumpPath` em `dllmain.cpp` ou passando outro caminho para `DumpVacModule`.
+O diretório de saída pode ser alterado modificando a variável `g_dumpPath` em `dllmain.cpp` ou passando outro caminho para `DumpVacModule`.
 
 ## Licença
 

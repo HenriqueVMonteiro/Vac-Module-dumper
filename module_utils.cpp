@@ -89,7 +89,11 @@ bool DumpVacModule(VacModuleInfo_t* m, const std::wstring& dumpDir)
     }
 
     std::vector<BYTE> buf(sz);
-    ReadProcessMemory(GetCurrentProcess(), base, buf.data(), sz, nullptr);
+    if (!ReadProcessMemory(GetCurrentProcess(), base, buf.data(), sz, nullptr))
+    {
+        std::cerr << "[-] ReadProcessMemory failed: " << GetLastError() << std::endl;
+        return false;
+    }
 
     if (m->m_pModule != nullptr)
         FixVacModule(reinterpret_cast<DWORD>(buf.data()), reinterpret_cast<DWORD>(m));
