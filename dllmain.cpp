@@ -25,14 +25,6 @@
 #pragma comment(lib,"libMinHook.x86.lib")
 #endif
 
-
-struct ModuleRange {
-	uintptr_t base;      // m_pModuleBase   ou   HMODULE
-	size_t    size;      // m_nModuleSize  ou   reserva real
-	uint32_t  crc;       // m_unCRC32
-};
-
-
 using RunFunc_t = int(__stdcall*)(
 	int stage,
 	void* pHdr,            //  a2  (VacCtxHeader*)
@@ -51,13 +43,9 @@ Call_t oCall = nullptr;
 using PFN_LoadLibraryExW = HMODULE(WINAPI*)(LPCWSTR, HANDLE, DWORD);
 static PFN_LoadLibraryExW oLoadLibraryExW = nullptr;
 
-struct HookMeta { uint32_t crc; FARPROC trampoline; };
 std::unordered_map<uint32_t, std::array<uint8_t, 16>> g_IceKeys;
-std::unordered_set<uint32_t> g_Dumped;
-std::unordered_set<uint32_t> g_SavedKeys;     // txt já gravado
-std::mutex g_Mtx;
 
-static const std::filesystem::path g_dumpPath = L"C:\\Lumina";
+static const std::filesystem::path g_dumpPath = L"C:\\VacDump";
 
 class MinHookGuard {
 public:
@@ -68,12 +56,13 @@ private:
     bool initialized;
 };
 static MinHookGuard g_MinHook;
+
 char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, char flags)
 {
 	bool bOriginalReturn = oGetEntryPoint(pModule, flags);
 
-	printf("--------------------------------------");
-	printf("[+] GetVacModuleEntrypointHook : start");
+	printf("--------------------------------------\n");
+	printf("[ ModuleEntryPoint ] ");
 	printf("[+] : iFlags\t%d\n", flags);
 	printf("[+] : m_unCRC32\t%p\n", pModule->m_unCRC32);
 	printf("[+] : m_pRunFunc\t%p\n", pModule->m_pRunFunc);
@@ -104,7 +93,7 @@ VacModuleResult_t __fastcall hkCall(void* pThis, void* pEDX, unsigned int unHash
 	unsigned int unInDataSize, void* pOutData, unsigned int* pOutDataSize)
 
 {
-	/* 1) força LoadLibrary (clear bit 0x02) */
+	/* 1) força o vac usar LoadLibrary (clear bit 0x02) */
 	unFlags &= ~0x02;                
 
 	unsigned char* pIn = reinterpret_cast<unsigned char*>(pInData);
@@ -131,8 +120,7 @@ VacModuleResult_t __fastcall hkCall(void* pThis, void* pEDX, unsigned int unHash
 
 	VacModuleResult_t unResult = oCall(pThis, pEDX, unHash, unFlags, nA, nB, unActionID, nC, pInData, unInDataSize, pOutData, pOutDataSize);
 
-	printf("[DumpVAC] ");
-	printf("PostCallFunctionAsyncInternal\n");
+	printf("[ CClientModuleManager::LoadModule ]\n");
 	printf(" -> (this)      = 0x%08X\n", reinterpret_cast<unsigned int>(pThis));
 	printf(" -> Hash        = 0x%08X\n", unHash);
 	printf(" -> Flags       = 0x%02X\n", unFlags);
@@ -184,47 +172,47 @@ HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
 
 void InitHook()
 {
-        if (!g_MinHook.ok())
-                return;
-        // @xref: pModule->m_pModule == NULL
-        uintptr_t entry = util::get_sig("steamservice.dll", "55 8B EC 83 EC 24 53 56 8B 75 08 8B D9");
+	if (!g_MinHook.ok())
+		return;
 
-        if (!entry)
-        {
-                std::cout << "[!] entry não encontrado!\n";
-                return;
-        }
+	// @xref: pModule->m_pModule == NULL
+	uintptr_t entry = util::get_sig("steamservice.dll", "55 8B EC 83 EC 24 53 56 8B 75 08 8B D9");
+
+	if (!entry)
+	{
+		std::cout << "[!] entry não encontrado!\n";
+		return;
+	}
 	std::cout << "[*] entry encontrado em: 0x" << std::hex << entry << std::endl;
 
 	// @xref: pModule->m_nLastResult != k_ECallResultNone
 	uintptr_t call_hook = util::get_sig("steamservice.dll", "55 8B EC 6A ? 68 ? ? ? ? 68 ? ? ? ? 64 A1 ? ? ? ? 50 64 89 25 ? ? ? ? 83 EC ? 53 56 57 89 65 ? 8B F9");
 
-        if (!call_hook)
-        {
-                std::cout << "[!] call_hook não encontrado!\n";
-                return;
-        }
+	if (!call_hook)
+	{
+		std::cout << "[!] call_hook não encontrado!\n";
+		return;
+	}
 	std::cout << "[*] call_hook encontrado em: 0x" << std::hex << call_hook << std::endl;
 
 	//auto target_func = util::resolve_relative_address(reinterpret_cast<uint8_t*>(call_instr), 1, 5);
 
-        if (MH_CreateHook(reinterpret_cast<void*>(entry), &hkGetEntryPoint, reinterpret_cast<void**>(&oGetEntryPoint)) != MH_OK)
-                return;
+	if (MH_CreateHook(reinterpret_cast<void*>(entry), &hkGetEntryPoint, reinterpret_cast<void**>(&oGetEntryPoint)) != MH_OK)
+		return;
 
-        if (MH_EnableHook(reinterpret_cast<void*>(entry)) != MH_OK)
-                return;
+	if (MH_EnableHook(reinterpret_cast<void*>(entry)) != MH_OK)
+		return;
 
-        if (MH_CreateHook(reinterpret_cast<void*>(call_hook), &hkCall, reinterpret_cast<void**>(&oCall)) != MH_OK)
-                return;
+	if (MH_CreateHook(reinterpret_cast<void*>(call_hook), &hkCall, reinterpret_cast<void**>(&oCall)) != MH_OK)
+		return;
 
-        if (MH_EnableHook(reinterpret_cast<void*>(call_hook)) != MH_OK)
-                return;
+	if (MH_EnableHook(reinterpret_cast<void*>(call_hook)) != MH_OK)
+		return;
 
 	MH_CreateHookApi(L"kernel32", "LoadLibraryExW", &LoadLibraryExWHk, (void**)&oLoadLibraryExW);
 	MH_EnableHook(MH_ALL_HOOKS);
 
 	printf("[+] Hook instalado: LoadLibraryExW\n");
-
 
 	std::cout << "[+] Hook instalado: GetEntryPoint @ 0x"
 		<< std::hex << entry << std::endl;
