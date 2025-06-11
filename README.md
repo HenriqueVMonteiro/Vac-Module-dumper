@@ -8,7 +8,7 @@ O projeto foi criado originalmente para Visual Studio. Para compilar:
 
 1. Clone este repositório incluindo o subdiretório `MinHook`.
 2. Abra `VacDumper.sln` no Visual Studio 2019 ou superior.
-3. Compile na configuração `Release` (32 ou 64 bits).
+3. Compile na configuração `Release` x86 .
 
 Também é possível criar um projeto via **CMake** utilizando os arquivos fonte em `dllmain.cpp`, `module_utils.cpp` e `icekey.cpp`.
 
@@ -20,7 +20,7 @@ Exemplo simplificado de uso:
 
 ```cpp
 // após compilar VacModuleDumper.dll
-// injete a DLL no processo steamservice.exe
+// injete a DLL no processo steam.exe ( admin )
 ```
 
 O diretório de saída pode ser alterado modificando a variável `dumpPath` em `dllmain.cpp` ou passando outro caminho para `DumpVacModule`.
