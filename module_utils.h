@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include "vacstructs.h"
+#include <string>
 
 bool DecryptVacModule(uint8_t* base, size_t imgSize, const uint8_t key[8]);
 bool DumpVacModule(VacModuleInfo_t* m, const std::wstring& dumpDir = L"C:\\Lumina");

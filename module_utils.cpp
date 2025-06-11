@@ -3,11 +3,7 @@
 #include <fstream>
 #include <filesystem>
 #include <iostream>
-
-struct IceChunk {
-    uint32_t rva;
-    uint32_t size;
-};
+#include <cstring>
 
 void FixVacModule(DWORD pImage, DWORD pModule_)
 {
@@ -19,7 +15,7 @@ void FixVacModule(DWORD pImage, DWORD pModule_)
 
     for (size_t i = 0; i < pNtHeader->FileHeader.NumberOfSections; i++)
     {
-        DWORD iSectionRva = pSectionHeader->Misc.VirtualSize - pModule->m_pModule->m_pModuleBase;
+        DWORD iSectionRva = pSectionHeader->VirtualAddress;
         pSectionHeader->PointerToRawData = iSectionRva;
         pSectionHeader->Misc.VirtualSize = pSectionHeader->SizeOfRawData;
 
@@ -30,23 +26,19 @@ void FixVacModule(DWORD pImage, DWORD pModule_)
     }
 }
 
-DWORD GetAllocationSize(DWORD iStartAddress)
+size_t GetAllocationSize(void* startAddress)
 {
     MEMORY_BASIC_INFORMATION mbi{};
-    DWORD iOffset = iStartAddress;
-    DWORD iSize = 0;
+    auto* offset = static_cast<BYTE*>(startAddress);
+    size_t size = 0;
 
-    do {
-        if (!VirtualQuery((LPCVOID)iOffset, &mbi, sizeof(mbi)))
-            break;
-        if (mbi.State == MEM_RESERVE)
-            break;
+    while (VirtualQuery(offset, &mbi, sizeof(mbi)) && mbi.State != MEM_RESERVE)
+    {
+        size += mbi.RegionSize;
+        offset += mbi.RegionSize;
+    }
 
-        iSize += mbi.RegionSize;
-        iOffset += mbi.RegionSize;
-    } while (true);
-
-    return iSize;
+    return size;
 }
 
 bool DecryptVacModule(uint8_t* base, size_t imgSize, const uint8_t key[8])
@@ -78,14 +70,14 @@ bool DecryptVacModule(uint8_t* base, size_t imgSize, const uint8_t key[8])
 
 bool DumpVacModule(VacModuleInfo_t* m, const std::wstring& dumpDir)
 {
-    BYTE* base = nullptr; DWORD sz = 0;
+    BYTE* base = nullptr; size_t sz = 0;
     if (m->m_pModule) {
         base = (BYTE*)m->m_pModule->m_pModuleBase;
-        sz = GetAllocationSize((DWORD)base);
+        sz = GetAllocationSize(base);
     }
     else if (m->m_hModule) {
         base = (BYTE*)m->m_hModule;
-        sz = GetAllocationSize((DWORD)base);
+        sz = GetAllocationSize(base);
     }
     else if (m->m_pRawModule && m->m_nModuleSize) {
         base = (BYTE*)m->m_pRawModule;
