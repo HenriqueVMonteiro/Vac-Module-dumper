@@ -1,6 +1,9 @@
 #pragma once
+/// \file
+/// \brief VAC internal structures used by the dumper.
 #include <Windows.h>
 
+/** Represents a loaded VAC module. */
 struct VacModule_t {
 	WORD m_nRunFuncExportFunctionOrdinal;
 	WORD m_nRunFuncExportModuleOrdinal;
@@ -34,6 +37,7 @@ struct VacModuleCustomDosHeader_t {
 	BYTE  m_CryptedRSASignature[0x80];
 };
 
+/** Metadata for a VAC module as loaded by Steam. */
 struct VacModuleInfo_t
 {
 	DWORD m_unCRC32;
@@ -54,34 +58,34 @@ struct VacModuleInfo_t
 };
 
 /*-----------------------------------------------------------*
- *  Contexto passado como 2º parâmetro de _runfunc@20        *
- *  (layout mínimo suficiente para extrair a ICE-key)        *
+ *  Contexto passado como 2Âº parÃ¢metro de _runfunc@20        *
+ *  (layout mÃ­nimo suficiente para extrair a ICE-key)        *
  *-----------------------------------------------------------*/
 #pragma pack(push,1)
 typedef struct VacRuntimeCtx
 {
 	void* pMgrVft;     //  0x00  ponteiro p/ v-table do manager
-	uint8_t    unk0[0x0C];  //  0x04  paddings/flags que não precisamos agora
+	uint8_t    unk0[0x0C];  //  0x04  paddings/flags que nÃ£o precisamos agora
 	uint8_t    iceKey[8];   //  0x10  *** 8-byte ICE key ***
 	uint8_t    unk1[];      //  0x18  dados runtime variados
 } VacRuntimeCtx;
 #pragma pack(pop)
 
 /*-----------------------------------------------------------*
- *  Entrada da tabela de segmentos ICE dentro do módulo      *
- *  (vista no blog do r0da como “chunk table” – DataDir[13]) *
+ *  Entrada da tabela de segmentos ICE dentro do mÃ³dulo      *
+ *  (vista no blog do r0da como Â“chunk tableÂ” Â– DataDir[13]) *
  *-----------------------------------------------------------*/
 typedef struct IceChunk
 {
-	uint32_t rva;   // offset relativo dentro do módulo
-	uint32_t size;  // bytes criptografados (múltiplos de 8)
+	uint32_t rva;   // offset relativo dentro do mÃ³dulo
+	uint32_t size;  // bytes criptografados (mÃºltiplos de 8)
 } IceChunk;
 
 typedef struct VacCtxHeader
 {
 	uint32_t key_lo;          // +0x00  <- primeiro dword da ICE-key (parte 1)
 	uint32_t key_hi;          // +0x04  <- segundo  dword da ICE-key (parte 2)
-	uint32_t crc_inv;         // +0x08  <- ~CRC32 que será checado
+	uint32_t crc_inv;         // +0x08  <- ~CRC32 que serÃ¡ checado
 	uint32_t unk_ptr;         // +0x0C  <- salvo em a3[0] / v6 (tag ou callback)
 	uint8_t  encImports[160]; // +0x10  <- tabela criptografada de imports                      
 } VacCtxHeader;

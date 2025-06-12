@@ -1,4 +1,5 @@
-﻿// dllmain.cpp : Define o ponto de entrada para o aplicativo DLL.
+/// \file
+/// \brief DLL entry point and hook initialization for dumping VAC modules.
 #include <iostream>
 #include <cstdint>
 #include <array>            
@@ -30,6 +31,14 @@ std::unordered_map<uint32_t, std::array<uint8_t, 16>> g_IceKeys;
 
 static const std::filesystem::path g_dumpPath = L"C:\\VacDump";
 
+/**
+ * @brief Hook for the VAC module entry point.
+ *
+ * Logs module information and optionally dumps the module when loaded.
+ * @param pModule Pointer to the module info structure.
+ * @param flags   Flags passed by the loader.
+ * @return Original function return value.
+ */
 char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, char flags)
 {
 	bool bOriginalReturn = oGetEntryPoint(pModule, flags);
@@ -62,8 +71,14 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, char flags)
 	return bOriginalReturn;
 }
 
-VacModuleResult_t __fastcall hkCall(void* pThis, void* pEDX, unsigned int unHash, unsigned char unFlags, int nA, int nB, unsigned int unActionID, int nC, void* pInData,
-	unsigned int unInDataSize, void* pOutData, unsigned int* pOutDataSize)
+/**
+ * @brief Hook for CClientModuleManager::LoadModule.
+ *
+ * Captures ICE keys and logs module load parameters.
+ */
+VacModuleResult_t __fastcall hkCall(void* pThis, void* pEDX, unsigned int unHash, unsigned char unFlags,
+        int nA, int nB, unsigned int unActionID, int nC, void* pInData,
+        unsigned int unInDataSize, void* pOutData, unsigned int* pOutDataSize)
 
 {
 	/* 1) força o vac usar LoadLibrary (clear bit 0x02) */
@@ -107,9 +122,15 @@ VacModuleResult_t __fastcall hkCall(void* pThis, void* pEDX, unsigned int unHash
 	return unResult;
 }
 
+/**
+ * @brief Intercepts LoadLibraryExW to copy temporary VAC modules.
+ *
+ * Copies the downloaded file to the dump directory before the real
+ * LoadLibraryExW runs.
+ */
 HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
-	HANDLE  hFile,
-	DWORD   dwFlags)
+        HANDLE  hFile,
+        DWORD   dwFlags)
 {
 	// 1) Se parecer vac_xxxx.tmp, copie imediatamente
         if (wcsstr(lpLibFileName, L".tmp"))
@@ -142,6 +163,9 @@ HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
 	return oLoadLibraryExW(lpLibFileName, hFile, dwFlags);
 }
 
+/**
+ * @brief Initializes MinHook and installs all required hooks.
+ */
 void InitHook()
 {
 	if (!g_MinHook.ok())
@@ -191,6 +215,9 @@ void InitHook()
 		<< std::hex << call_hook << std::endl;
 }
 
+/**
+ * @brief Allocates a simple debug console for stdout/stderr logging.
+ */
 void OpenDebugConsole()
 {
 	// Aloca um console para o processo
@@ -219,6 +246,9 @@ void OpenDebugConsole()
 	}
 }
 
+/**
+ * @brief Standard DLL entry point.
+ */
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved

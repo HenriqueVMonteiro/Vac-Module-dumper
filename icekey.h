@@ -1,7 +1,7 @@
-// Purpose: Header file for the C++ ICE encryption class.
-//			Taken from public domain code, as written by Matthew Kwan - July 1996
-//			http://www.darkside.com.au/ice/
-
+/// \file
+/// \brief Header for the ICE symmetric encryption class.
+/// Taken from public domain code by Matthew Kwan - July 1996
+/// http://www.darkside.com.au/ice/
 #ifndef _IceKey_H
 #define _IceKey_H
 

@@ -1,6 +1,5 @@
-// Purpose: C++ implementation of the ICE encryption algorithm.
-//			Taken from public domain code, as written by Matthew Kwan - July 1996
-//			http://www.darkside.com.au/ice/
+/// \file
+/// \brief Implementation of the ICE encryption algorithm.
 #include "icekey.h"
 //#include "tier0/memdbgon.h"
 #pragma warning(disable: 4244)
@@ -386,3 +385,4 @@ IceKey::blockSize() const
 {
 	return (8);
 }
+

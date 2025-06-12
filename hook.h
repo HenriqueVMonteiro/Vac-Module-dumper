@@ -1,4 +1,6 @@
 #pragma once
+/// \file
+/// \brief Hook helpers and global hook state.
 
 using GetEntryPointFn = char(__stdcall*)(VacModuleInfo_t*, char);
 GetEntryPointFn oGetEntryPoint = nullptr;
@@ -9,6 +11,7 @@ Call_t oCall = nullptr;
 using PFN_LoadLibraryExW = HMODULE(WINAPI*)(LPCWSTR, HANDLE, DWORD);
 static PFN_LoadLibraryExW oLoadLibraryExW = nullptr;
 
+/** Simple RAII wrapper around the MinHook API. */
 class MinHookGuard {
 public:
     MinHookGuard() : initialized(MH_Initialize() == MH_OK) {}
