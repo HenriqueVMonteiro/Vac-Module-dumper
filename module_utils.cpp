@@ -1,10 +1,15 @@
 #include "module_utils.h"
+/// \file
+/// \brief Implementation of helper functions for dumping VAC modules.
 #include "icekey.h"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
 #include <cstring>
 
+/**
+ * @brief Fixes section headers of a dumped VAC module so it can be loaded.
+ */
 void FixVacModule(DWORD pImage, DWORD pModule_)
 {
     VacModuleInfo_t* pModule = (VacModuleInfo_t*)pModule_;
@@ -26,6 +31,9 @@ void FixVacModule(DWORD pImage, DWORD pModule_)
     }
 }
 
+/**
+ * @brief Calculates the full size of a virtual allocation.
+ */
 size_t GetAllocationSize(void* startAddress)
 {
     MEMORY_BASIC_INFORMATION mbi{};
@@ -41,6 +49,9 @@ size_t GetAllocationSize(void* startAddress)
     return size;
 }
 
+/**
+ * @brief Decrypts ICE-protected sections of a VAC module.
+ */
 bool DecryptVacModule(uint8_t* base, size_t imgSize, const uint8_t key[8])
 {
     auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
@@ -68,6 +79,9 @@ bool DecryptVacModule(uint8_t* base, size_t imgSize, const uint8_t key[8])
     return true;
 }
 
+/**
+ * @brief Dumps a loaded VAC module to disk for analysis.
+ */
 bool DumpVacModule(VacModuleInfo_t* m, const std::wstring& dumpDir)
 {
     BYTE* base = nullptr; size_t sz = 0;

@@ -1,30 +1,32 @@
-# Vac Module Dumper
+# VAC Module Dumper
 
-Ferramenta para interceptar e salvar em disco os módulos carregados pelo **Valve Anti-Cheat** (VAC). O projeto utiliza hooks via [MinHook](https://github.com/TsudaKageyu/minhook) para capturar o momento em que os módulos são baixados e descriptografados pelo `steamservice.dll`.
+VAC Module Dumper is a small utility that captures the anti‑cheat modules downloaded by Steam and writes them to disk. It hooks the internal loading routines of `steamservice.dll` using [MinHook](https://github.com/TsudaKageyu/minhook).
 
-## Compilação
+> **Disclaimer**
+> This project is provided for educational purposes only. Dumping VAC modules may violate Steam's Terms of Service. Use responsibly and at your own risk.
 
-O projeto foi criado originalmente para Visual Studio. Para compilar:
+## Building
 
-1. Clone este repositório incluindo o subdiretório `MinHook`.
-2. Abra `VacDumper.sln` no Visual Studio 2019 ou superior.
-3. Compile na configuração `Release` x86 .
+The original project ships with a Visual Studio solution. You can either open `VacDumper.sln` in Visual Studio 2019+ or build with **CMake**:
 
-Também é possível criar um projeto via **CMake** utilizando os arquivos fonte em `dllmain.cpp`, `module_utils.cpp` e `icekey.cpp`.
-
-## Uso
-
-Ao injetar a DLL resultante no processo do Steam, os módulos do VAC serão copiados para a pasta `C:\Lumina`. As chaves ICE utilizadas na descriptografia também são gravadas nesse diretório.
-
-Exemplo simplificado de uso:
-
-```cpp
-// após compilar VacModuleDumper.dll
-// injete a DLL no processo steam.exe ( admin )
+```bash
+cmake -S . -B build
+cmake --build build --config Release
 ```
 
-O diretório de saída pode ser alterado modificando a variável `g_dumpPath` em `dllmain.cpp` ou passando outro caminho para `DumpVacModule`.
+MinHook is included as a subdirectory and no additional dependencies are required.
 
-## Licença
+### Documentation
 
-Este projeto é distribuído sob a [Unlicense](LICENSE), domínio público.
+This repository uses Doxygen-style comments. Run `doxygen` to generate the HTML
+documentation inside the `docs` folder.
+
+## Usage
+
+Inject the resulting `VacModuleDumper.dll` into `steam.exe` **with administrator privileges**. Extracted modules are written to `C:\VacDump` by default along with the ICE keys used for decryption.
+
+You can change the output path by editing the variable `g_dumpPath` in `dllmain.cpp`.
+
+## License
+
+This project is released into the public domain under the [Unlicense](LICENSE).

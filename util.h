@@ -1,7 +1,10 @@
 #pragma once
+/// \file
+/// \brief Utility helpers used throughout the project.
 #include <Windows.h>
 
 
+/** Converts a byte buffer to a hexadecimal string. */
 inline std::string BytesToHex(const uint8_t* data, size_t len)
 {
 	std::ostringstream oss;
@@ -10,6 +13,7 @@ inline std::string BytesToHex(const uint8_t* data, size_t len)
 	return oss.str();
 }
 
+/** Calculates the SHA-256 hash of a data buffer. */
 inline std::string SHA256(const void* data, size_t size)
 {
 	HCRYPTPROV hProv = 0;
@@ -30,6 +34,7 @@ inline std::string SHA256(const void* data, size_t size)
 	return result;
 }
 
+/** Writes binary data to a file. */
 inline void DumpToFile(const std::string& path, const void* data, size_t size)
 {
 	std::ofstream file(path, std::ios::binary);
@@ -37,6 +42,7 @@ inline void DumpToFile(const std::string& path, const void* data, size_t size)
 	file.close();
 }
 
+/** Writes text to a UTF-8 file. */
 inline void WriteText(const std::string& path, const std::string& txt)
 {
 	std::ofstream f(path);
@@ -106,11 +112,11 @@ namespace util {
 		return 0;
 	}
 
-	/// @brief Resolve endereço absoluto a partir de uma instrução com offset relativo (x86).
-	/// @param instr Ponteiro para o início da instrução (ex: call E8 ?? ?? ?? ??)
-	/// @param offset_to_rel Offset do campo relativo (normalmente 1 para instruções como E8 xx xx xx xx)
-	/// @param instr_size Tamanho total da instrução (normalmente 5 bytes para call/jmp)
-	/// @returns Ponteiro absoluto resolvido
+        /// Resolve an absolute address from an instruction with a relative offset.
+        /// @param instr   Pointer to the start of the instruction (e.g. call opcode).
+        /// @param offset_to_rel Offset of the relative field inside the instruction.
+        /// @param instr_size Total instruction size in bytes.
+        /// @return Resolved absolute pointer.
 	inline std::uint8_t* resolve_relative_address(std::uint8_t* instr, std::uint32_t offset_to_rel, std::uint32_t instr_size)
 	{
 		const auto rel = *reinterpret_cast<std::int32_t*>(instr + offset_to_rel);
