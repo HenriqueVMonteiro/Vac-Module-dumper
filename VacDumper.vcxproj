@@ -155,6 +155,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />
+    <ClInclude Include="hook.h" />
     <ClInclude Include="icekey.h" />
     <ClInclude Include="module_utils.h" />
     <ClInclude Include="util.h" />

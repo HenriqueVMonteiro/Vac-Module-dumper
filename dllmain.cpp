@@ -18,6 +18,7 @@
 #include "vacstructs.h"
 #include "module_utils.h"
 #include <MinHook.h>
+#include "hook.h"
 
 #if _WIN64
 #pragma comment(lib,"libMinHook.x64.lib")
@@ -25,44 +26,16 @@
 #pragma comment(lib,"libMinHook.x86.lib")
 #endif
 
-using RunFunc_t = int(__stdcall*)(
-	int stage,
-	void* pHdr,            //  a2  (VacCtxHeader*)
-	unsigned int len,      //  a3
-	void* pBuf,            //  a4
-	unsigned int* pOut);   //  a5
-RunFunc_t oRunFunc = nullptr;
-
-// função original
-using GetEntryPointFn = char(__stdcall*)(VacModuleInfo_t*, char);
-GetEntryPointFn oGetEntryPoint = nullptr;
-
-using Call_t = VacModuleResult_t(__fastcall*)(void* pThis, void* pEDX, unsigned int unHash, unsigned char unFlags, int nA, int nB, unsigned int unID, int nC, void* pInData, unsigned int unInDataSize, void* pOutData, unsigned int* pOutDataSize);
-Call_t oCall = nullptr;
-
-using PFN_LoadLibraryExW = HMODULE(WINAPI*)(LPCWSTR, HANDLE, DWORD);
-static PFN_LoadLibraryExW oLoadLibraryExW = nullptr;
-
 std::unordered_map<uint32_t, std::array<uint8_t, 16>> g_IceKeys;
 
 static const std::filesystem::path g_dumpPath = L"C:\\VacDump";
-
-class MinHookGuard {
-public:
-    MinHookGuard() : initialized(MH_Initialize() == MH_OK) {}
-    ~MinHookGuard() { if (initialized) MH_Uninitialize(); }
-    bool ok() const { return initialized; }
-private:
-    bool initialized;
-};
-static MinHookGuard g_MinHook;
 
 char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, char flags)
 {
 	bool bOriginalReturn = oGetEntryPoint(pModule, flags);
 
 	printf("--------------------------------------\n");
-	printf("[ ModuleEntryPoint ] ");
+	printf("[ ModuleEntryPoint ] \n");
 	printf("[+] : iFlags\t%d\n", flags);
 	printf("[+] : m_unCRC32\t%p\n", pModule->m_unCRC32);
 	printf("[+] : m_pRunFunc\t%p\n", pModule->m_pRunFunc);
@@ -169,7 +142,6 @@ HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
 	return oLoadLibraryExW(lpLibFileName, hFile, dwFlags);
 }
 
-
 void InitHook()
 {
 	if (!g_MinHook.ok())
@@ -177,7 +149,6 @@ void InitHook()
 
 	// @xref: pModule->m_pModule == NULL
 	uintptr_t entry = util::get_sig("steamservice.dll", "55 8B EC 83 EC 24 53 56 8B 75 08 8B D9");
-
 	if (!entry)
 	{
 		std::cout << "[!] entry não encontrado!\n";
@@ -187,7 +158,6 @@ void InitHook()
 
 	// @xref: pModule->m_nLastResult != k_ECallResultNone
 	uintptr_t call_hook = util::get_sig("steamservice.dll", "55 8B EC 6A ? 68 ? ? ? ? 68 ? ? ? ? 64 A1 ? ? ? ? 50 64 89 25 ? ? ? ? 83 EC ? 53 56 57 89 65 ? 8B F9");
-
 	if (!call_hook)
 	{
 		std::cout << "[!] call_hook não encontrado!\n";
