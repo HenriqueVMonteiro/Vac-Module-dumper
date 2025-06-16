@@ -29,16 +29,6 @@ enum VacModuleResult_t {
 	FAIL_GET_EXPORT_RUNFUNC = 0x17,
 	FAIL_GET_EXPORT_RUNFUNC_2 = 0x19
 };
-
-typedef struct _MODULE_HEADER {
-	IMAGE_DOS_HEADER m_DH;
-	unsigned int m_unMagic;
-	unsigned int m_unCrypt;
-	unsigned int m_unFileSize;
-	unsigned int m_unTimeStamp;
-	unsigned char m_pCryptRSASignature[0x80];
-} MODULE_HEADER, * PMODULE_HEADER;
-
 struct VacModuleCustomDosHeader_t {
 	struct _IMAGE_DOS_HEADER m_DosHeader;
 	DWORD m_ValveHeaderMagic; // 'VLV' ou 0x564C56
@@ -59,16 +49,35 @@ typedef struct _MODULE {
 	void* m_pIAT;
 } MODULE, * PMODULE;
 
+typedef struct _MODULE_HEADER {
+	IMAGE_DOS_HEADER m_DH;
+	unsigned int m_unMagic;
+	unsigned int m_unCrypt;
+	unsigned int m_unFileSize;
+	unsigned int m_unTimeStamp;
+	unsigned char m_pCryptRSASignature[0x80];
+} MODULE_HEADER, * PMODULE_HEADER;
+
+typedef struct _MODULE_INFO {
+	unsigned int m_unHash; // CRC32
+	HMODULE m_hModule;
+	PMODULE m_pModule;
+	fnRunFunc m_pRunFunc;
+	VacModuleResult_t m_unLastResult;
+	unsigned int m_unModuleSize;
+	PMODULE_HEADER m_pRawModule;
+} MODULE_INFO, * PMODULE_INFO;
+
 /** Metadata for a VAC module as loaded by Steam. */
 struct VacModuleInfo_t
 {
 	unsigned int m_unCRC32;
 	HMODULE m_hModule;
-	PMODULE* m_pModule;
-	DWORD m_pRunFunc;
-	enum VacModuleResult_t m_nLastResult;
+	PMODULE m_pModule;
+	fnRunFunc m_pRunFunc;
+	VacModuleResult_t m_nLastResult;
 	unsigned int m_nModuleSize;
-	PMODULE_HEADER* m_pRawModule;
+	PMODULE_HEADER m_pRawModule;
 	WORD unkn08;
 	BYTE m_nUnknFlag_1;
 	BYTE m_nUnknFlag_0;

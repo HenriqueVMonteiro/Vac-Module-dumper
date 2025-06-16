@@ -71,32 +71,58 @@ VacModuleResult_t __stdcall RunFunc_Hook(unsigned int unID, void* pInData, unsig
 char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 {
 	printf("--------------------------------------\n");
-	printf("[ ModuleEntryPoint ] \n");
-	printf("[+] : iFlags\t0x%02X\n", flags);
-
+	printf("PreLoadModuleStandard\n");
+	printf( " -> ModuleInfo = 0x%08X\n", reinterpret_cast<unsigned int>(pModule));
 	if (pModule) {
-		printf("[+] : m_unCRC32\t%p\n", pModule->m_unCRC32);
-		printf("[+] : m_pRunFunc\t%p\n", pModule->m_pRunFunc);
-		printf("[+] : m_nModuleSize\t%0x%08X\n", pModule->m_nModuleSize);
-		printf("[+] : m_pRawModule\t%p\n", pModule->m_pRawModule);
-		printf("[+] : m_nLastResult\t%d\n", pModule->m_nLastResult);
-		printf("--------------------------------------\n");
+		printf( "    -> m_unHash       = 0x%08X\n", pModule->m_unCRC32);
+		printf( "    -> m_hModule      = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_hModule));
+		printf( "    -> m_pModule      = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pModule));
+		if (pModule->m_pModule) {
+			printf( "       -> m_unRunFuncExportFunctionOrdinal = 0x%04X\n", pModule->m_pModule->m_unRunFuncExportFunctionOrdinal);
+			printf( "       -> m_unRunFuncExportModuleOrdinal   = 0x%04X\n", pModule->m_pModule->m_unRunFuncExportModuleOrdinal);
+			printf( "       -> m_pModuleBase                    = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pModule->m_pModuleBase));
+			printf( "       -> m_pNTHs                          = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pModule->m_pNTHs));
+			printf( "       -> m_unImportedLibraryCount         = 0x%08X\n", pModule->m_pModule->m_unImportedLibraryCount);
+			printf( "       -> m_pIAT                           = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pModule->m_pIAT));
+		}
+		printf( "    -> m_pRunFunc     = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pRunFunc));
+		printf( "    -> m_unLastResult = 0x%08X\n", pModule->m_nLastResult);
+		printf( "    -> m_unModuleSize = 0x%08X\n", pModule->m_nModuleSize);
+		printf( "    -> m_pRawModule   = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pRawModule));
 	}
+	printf( " -> unFlags    = 0x%02X\n", flags);
 
-	//reinterpret_cast<PMODULE_HEADER>(pModule->m_pRawModule)->m_unCrypt = 0;
+	printf("--------------------------------------\n");
 
 	bool bOriginalReturn = oGetEntryPoint(pModule, flags);
 	if (!pModule) {
 		return bOriginalReturn;
 	}
 
-	/*if (pModule->m_pRunFunc) {
-		if (!bOriginalReturn) {
-			RunFunc = pModule->m_pRunFunc;	
+	printf("--------------------------------------\n");
+	printf( "PostLoadModuleStandard\n");
+	printf( " -> ModuleInfo = 0x%08X\n", reinterpret_cast<unsigned int>(pModule));
+	if (pModule) {
+		printf( "    -> m_unHash       = 0x%08X\n", pModule->m_unCRC32);
+		printf( "    -> m_hModule      = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_hModule));
+		printf( "    -> m_pModule      = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pModule));
+		if (pModule->m_pModule) {
+			printf( "       -> m_unRunFuncExportFunctionOrdinal = 0x%04X\n", pModule->m_pModule->m_unRunFuncExportFunctionOrdinal);
+			printf( "       -> m_unRunFuncExportModuleOrdinal   = 0x%04X\n", pModule->m_pModule->m_unRunFuncExportModuleOrdinal);
+			printf( "       -> m_pModuleBase                    = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pModule->m_pModuleBase));
+			printf( "       -> m_pNTHs                          = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pModule->m_pNTHs));
+			printf( "       -> m_unImportedLibraryCount         = 0x%08X\n", pModule->m_pModule->m_unImportedLibraryCount);
+			printf( "       -> m_pIAT                           = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pModule->m_pIAT));
 		}
+		printf( "    -> m_pRunFunc     = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pRunFunc));
+		printf( "    -> m_unLastResult = 0x%08X\n", pModule->m_nLastResult);
+		printf( "    -> m_unModuleSize = 0x%08X\n", pModule->m_nModuleSize);
+		printf( "    -> m_pRawModule   = 0x%08X\n", reinterpret_cast<unsigned int>(pModule->m_pRawModule));
+	}
+	printf( " -> unFlags    = 0x%02X\n", flags);
+	printf( " -> Result     = 0x%02X\n", bOriginalReturn);
 
-		pModule->m_pRunFunc = RunFunc_Hook;
-	}*/
+	printf("--------------------------------------\n");
 
 	HMODULE hModule = pModule->m_hModule;
 	if (!hModule) {
@@ -262,7 +288,7 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 				return bOriginalReturn;
 			}
 		}
-	}				
+	}
 
 	return bOriginalReturn;
 }
@@ -278,7 +304,7 @@ VacModuleResult_t __fastcall hkCall(void* pThis, void* pEDX, unsigned int unHash
 
 {
 	/* 1) força o vac usar LoadLibrary (clear bit 0x02) */
-	unFlags &= ~0x02;   
+	//unFlags &= ~0x02;   
 
 	unsigned char* pIn = reinterpret_cast<unsigned char*>(pInData);
 	if (pIn) {
