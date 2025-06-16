@@ -11,6 +11,7 @@ Call_t oCall = nullptr;
 using PFN_LoadLibraryExW = HMODULE(WINAPI*)(LPCWSTR, HANDLE, DWORD);
 static PFN_LoadLibraryExW oLoadLibraryExW = nullptr;
 
+
 /** Simple RAII wrapper around the MinHook API. */
 class MinHookGuard {
 public:
