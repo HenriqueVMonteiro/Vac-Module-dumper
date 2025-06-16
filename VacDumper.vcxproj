@@ -159,7 +159,6 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="hook.h" />
     <ClInclude Include="icekey.h" />
-    <ClInclude Include="module_utils.h" />
     <ClInclude Include="util.h" />
     <ClInclude Include="vacstructs.h" />
   </ItemGroup>
@@ -167,7 +166,6 @@
     <ClCompile Include="detours.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="icekey.cpp" />
-    <ClCompile Include="module_utils.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

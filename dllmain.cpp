@@ -18,7 +18,6 @@
 #include "util.h"
 #include "icekey.h"
 #include "vacstructs.h"
-#include "module_utils.h"
 #include <MinHook.h>
 #include "hook.h"
 
@@ -48,14 +47,14 @@ fnRunFunc RunFunc = nullptr;
 VacModuleResult_t __stdcall RunFunc_Hook(unsigned int unID, void* pInData, unsigned int unInDataSize, void* pOutData, unsigned int* pOutDataSize) {
 	if (!bCallOriginal) {
 		bCallOriginal = true;
-		printf("[DumpVAC] RunFunc ID=%08X\n", unID);
+		LOG(" RunFunc ID=%08X\n", unID);
 		VacModuleResult_t unResult = RunFunc(unID, pInData, unInDataSize, pOutData, pOutDataSize);
-		printf("[DumpVAC] OK.\n");
+		LOG("RunFunc og called");
 		return unResult;
 	}
 
-	printf("[DumpVAC] RunFunc ID=%08X\n", unID);
-	printf("[DumpVAC] RunFunc blocked.\n");
+	LOG("RunFunc ID=%08X", unID);
+	LOG("RunFunc blocked.");
 
 	if (unID == 4) {
 		return VacModuleResult_t::SUCCESS;
@@ -128,6 +127,13 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 
 	printf("--------------------------------------\n");
 
+	if (pModule->m_pRunFunc) {
+		if (!bCallOriginal) {
+			RunFunc = pModule->m_pRunFunc;
+		}
+		pModule->m_pRunFunc = RunFunc_Hook;
+	}
+
 	HMODULE hModule = pModule->m_hModule;
 	if (!hModule) {
 		return bOriginalReturn;
@@ -155,10 +161,10 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 
 			const size_t unModuleSize = pModule->m_nModuleSize;
 
-			printf("Found VAC module\n");
-			printf("-> Base = 0x%08X\n", hModule);
-			printf("-> Size = 0x%08X\n", unModuleSize);
-			printf("-> Path = `%ws`\n", Import->second.second.get());
+			LOG("Found VAC module\n");
+			LOG("-> Base = 0x%08X\n", hModule);
+			LOG("-> Size = 0x%08X\n", unModuleSize);
+			LOG("-> Path = `%ws`\n", Import->second.second.get());
 
 			if (!pModule->m_pRawModule)
 			{
@@ -173,12 +179,12 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 
 				unsigned char* pMemory = new unsigned char[unModuleSize];
 				if (!pMemory) {
-					LOG("new pMemory[] falhou");
+					LOG("new pMemory[] failed");
 					return bOriginalReturn;
 				}
 
 				memcpy(pMemory, pModule->m_pRawModule, unModuleSize);
-				LOG("Raw image copied");
+				LOG("m_pRawModule copied");
 
 				unsigned char* SystemInfo_Module = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x55\x8B\xEC\xB8\xF0\x43\x00\x00")));
 				if (SystemInfo_Module) {	
@@ -404,13 +410,19 @@ void ForceLoadLibrary()
 	}
 
 	// Forces to use LoadModuleStandard. (Potential File Spam)
-	pJZ[0] = 0xEB; // jz -> jmp
+	pJZ[0] = JMP; // jz -> jmp
 
 	if (!Memory::RestoreProtection(pJZ)) {
 		printf( "Failed to change memory protection for `74 47 6A 01 6A 00` signature.\n");
 		return;
 	}
 
+	/*  
+	    (Last instructions inside hkGetEntryPoint)
+		.text:10059219 89 46 20                                                        mov     [esi+20h], eax
+		.text:1005921C 89 4E 24                                                        mov     [esi+24h], ecx
+		.text:1005921F 74 18                                                           jz      short loc_10059239
+	*/
 	pJZ = const_cast<unsigned char*>(reinterpret_cast<const unsigned char* const>(Scan::FindSignature(hSteamService, "\x74\x18\xE8\x2A\x2A\x2A\x2A\x6A\x2A\xFF\x76\x18\x8B\xC8\x8B\x10\xFF\x52\x2A\xC7\x46\x18\x2A\x2A\x2A\x2A\x5E")));
 	if (!pJZ) {
 		
@@ -426,7 +438,7 @@ void ForceLoadLibrary()
 	}
 
 	// Forces to save RAW module in `MODULE_INFO`. (Potential Memory Leak?)
-	pJZ[0] = 0xEB; // jz -> jmp
+	pJZ[0] = JMP; // jz -> jmp
 
 	if (!Memory::RestoreProtection(pJZ)) {
 		
