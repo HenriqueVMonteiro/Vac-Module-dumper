@@ -25,6 +25,10 @@
 #define LOG(fmt, ...)  printf("[VACDBG] " fmt "\n", ##__VA_ARGS__)
 #define FAIL(msg)      do { LOG("!! %s", msg); goto cleanup; } while (0)
 
+#define MOV_EAX_IMM32 0xB8      /* mov eax, imm32 (B8+reg) */
+#define JMP           0xEB		/* jmp  rel8               */
+#define RET           0xC3      /* ret                     */
+
 using namespace Detours;
 
 #if _WIN64
@@ -176,26 +180,20 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 				memcpy(pMemory, pModule->m_pRawModule, unModuleSize);
 				LOG("Raw image copied");
 
-				unsigned char* MainModule_Loader = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x55\x8B\xEC\xB8\xF0\x43\x00\x00")));
-				if (MainModule_Loader) {
-					//LOG("MainModule_Loader signature not found");
-
-					//delete[] pMemory;
-					//return bOriginalReturn;
-
-
-					if (!Memory::ChangeProtection(MainModule_Loader, 1, PAGE_READWRITE)) {
+				unsigned char* SystemInfo_Module = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x55\x8B\xEC\xB8\xF0\x43\x00\x00")));
+				if (SystemInfo_Module) {	
+					if (!Memory::ChangeProtection(SystemInfo_Module, 1, PAGE_READWRITE)) {
 						delete[] pMemory;
 						return bOriginalReturn;
 					}
 
-					MainModule_Loader[0] = 0xC3; // "ret" instruction opcode
+					SystemInfo_Module[0] = RET; // "ret" instruction opcode
 
-					Memory::RestoreProtection(MainModule_Loader);
+					Memory::RestoreProtection(SystemInfo_Module);
 
-					LOG("Main Module Loader Patched.\n");
+					LOG("SystemInfo Module Patched.");
 				}
-				//																			for ( j = v35 >> 2; j < 0x422; ++j ) sub_xxx 
+				//																						for ( j = v35 >> 2; j < 0x422; ++j ) sub_xxx 
 				unsigned char* ShuffledLcgPRNG = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x51\x53\x56\x57\x8B\xF9")));
 				if (!ShuffledLcgPRNG) {
 					LOG("ShuffledLcgPRNG signature not found");
@@ -209,18 +207,18 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 				}
 
 				static const unsigned char patch[] = {
-					0xB8, 0x00, 0x00, 0x00, 0x00, // mov eax,0
-					0xC3                          // ret
+					MOV_EAX_IMM32, 0x00, 0x00, 0x00, 0x00,	 // mov eax,0
+					RET										 // ret
 				};
 
 				memcpy(ShuffledLcgPRNG, patch, sizeof(patch));
 
 				Memory::RestoreProtection(ShuffledLcgPRNG);
 
-				LOG("ShuffledLcgPRNG patched.\n");
-				/* rdtsc
-				.text:10003410 83 A4 24 CC 00 00 00 00 and [esp + 2B8h + var_1EC], 0
-				*/
+				LOG("ShuffledLcgPRNG patched.");
+																									/* rdtsc
+																									.text:10003410 83 A4 24 CC 00 00 00 00 and [esp + 2B8h + var_1EC], 0
+																									*/
 				unsigned char* pRDTSC = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x0F\x31\x83\xA4\x24")));
 				if (!pRDTSC) {
 					LOG("pRDTSC signature not found");
@@ -233,7 +231,7 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 					return bOriginalReturn;
 				}
 
-				// valores "fake" de timestamp (edx:eax)
+				//fake timestamp (edx:eax)
 				static const unsigned int kTscHi = 0x0009E9EC;
 				static const unsigned int kTscLo = 0xA8423856;
 
@@ -261,7 +259,7 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 
 				Memory::RestoreProtection(pRDTSC);
 
-				printf("RDTSC fixed.\n");
+				LOG("RDTSC fixed.");
 
 				char szBuffer[2048];
 				memset(szBuffer, 0, sizeof(szBuffer));
@@ -284,8 +282,7 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 				fclose(pFile);
 				delete[] pMemory;
 
-				printf("Dumped to `%s`.\n", szBuffer);
-
+				printf("Dumped to `%s`.\n\n", szBuffer);
 			cleanup:
 				return bOriginalReturn;
 			}
@@ -384,33 +381,7 @@ HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
 
 		Import->second = std::pair<HANDLE, std::unique_ptr<wchar_t[]>>(hFile, std::move(pMem));
 	}
-	// 1) Se parecer vac_xxxx.tmp, copie imediatamente
-	if (wcsstr(lpLibFileName, L".tmp"))
-	{
-		// tenta achar '_' antes da extensão; se não houver, usa o próprio nome
-		const wchar_t* fname = wcsrchr(lpLibFileName, L'\\');
-		fname = fname ? fname + 1 : lpLibFileName;        // só o arquivo
 
-		const wchar_t* under = wcsrchr(fname, L'_');
-		unsigned crc = 0xDEADBEEF;                        // fallback
-
-		if (under && wcslen(under) >= 5)                  // "_XXXX.tmp"
-			crc = std::wcstoul(under + 1, nullptr, 16);
-		else {
-			// usa quatro primeiros dígitos do nome (2304.tmp → 0x2304)
-			wchar_t tmp[5]{};
-			wcsncpy_s(tmp, fname, 4);
-			crc = std::wcstoul(tmp, nullptr, 16);
-		}
-
-		auto dstPath = std::filesystem::path(g_dumpPath) / std::format(L"vac_{:08X}.dll", crc);
-		std::filesystem::create_directories(g_dumpPath);
-		if (!CopyFileW(lpLibFileName, dstPath.c_str(), FALSE))
-			wprintf(L"[!] CopyFile falhou (%u) %ls → %ls\n",
-				GetLastError(), lpLibFileName, dstPath.c_str());
-	}
-
-	// 2) chama a API original
 	return oLoadLibraryExW(lpLibFileName, hFile, dwFlags);
 }
 
