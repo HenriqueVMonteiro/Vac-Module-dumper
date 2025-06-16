@@ -177,22 +177,24 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 				LOG("Raw image copied");
 
 				unsigned char* MainModule_Loader = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x55\x8B\xEC\xB8\xF0\x43\x00\x00")));
-				if (!MainModule_Loader) {
-					LOG("MainModule_Loader signature not found");
-					delete[] pMemory;
-					return bOriginalReturn;
+				if (MainModule_Loader) {
+					//LOG("MainModule_Loader signature not found");
+
+					//delete[] pMemory;
+					//return bOriginalReturn;
+
+
+					if (!Memory::ChangeProtection(MainModule_Loader, 1, PAGE_READWRITE)) {
+						delete[] pMemory;
+						return bOriginalReturn;
+					}
+
+					MainModule_Loader[0] = 0xC3; // "ret" instruction opcode
+
+					Memory::RestoreProtection(MainModule_Loader);
+
+					LOG("Main Module Loader Patched.\n");
 				}
-
-				if (!Memory::ChangeProtection(MainModule_Loader, 1, PAGE_READWRITE)) {
-					delete[] pMemory;
-					return bOriginalReturn;
-				}
-
-				MainModule_Loader[0] = 0xC3; // "ret" instruction opcode
-
-				Memory::RestoreProtection(MainModule_Loader);
-
-				printf("Main Module Loader Patched.\n");
 				//																			for ( j = v35 >> 2; j < 0x422; ++j ) sub_xxx 
 				unsigned char* ShuffledLcgPRNG = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x51\x53\x56\x57\x8B\xF9")));
 				if (!ShuffledLcgPRNG) {
@@ -215,11 +217,11 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 
 				Memory::RestoreProtection(ShuffledLcgPRNG);
 
-				printf("[DumpVAC] ShuffledLcgPRNG patched.\n");
+				LOG("ShuffledLcgPRNG patched.\n");
 				/* rdtsc
 				.text:10003410 83 A4 24 CC 00 00 00 00 and [esp + 2B8h + var_1EC], 0
 				*/
-				unsigned char* pRDTSC = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x0F\x31\x83\xA4\x24\xCC")));
+				unsigned char* pRDTSC = reinterpret_cast<unsigned char*>(const_cast<void*>(Scan::FindSignature(hModule, "\x0F\x31\x83\xA4\x24")));
 				if (!pRDTSC) {
 					LOG("pRDTSC signature not found");
 					delete[] pMemory;
@@ -263,7 +265,7 @@ char __stdcall hkGetEntryPoint(VacModuleInfo_t* pModule, unsigned char flags)
 
 				char szBuffer[2048];
 				memset(szBuffer, 0, sizeof(szBuffer));
-				sprintf_s(szBuffer, "%sVAC_%08X.dll", "C:\\VacDump", unHash);
+				sprintf_s(szBuffer, "%sVAC_%08X.dll", "C:\\VacDump\\", unHash);
 				FILE* pFile = nullptr;
 				fopen_s(&pFile, szBuffer, "wb+");
 				if (!pFile) {
@@ -412,6 +414,56 @@ HMODULE WINAPI LoadLibraryExWHk(LPCWSTR lpLibFileName,
 	return oLoadLibraryExW(lpLibFileName, hFile, dwFlags);
 }
 
+void ForceLoadLibrary()
+{
+	HMODULE hSteamService = GetModuleHandle(L"steamservice.dll");
+	if (!hSteamService) {
+		printf( "Unable to find `SteamService.dll` module.\n");
+		return;
+	}
+	unsigned char* pJZ = const_cast<unsigned char*>(reinterpret_cast<const unsigned char* const>(Scan::FindData(hSteamService, reinterpret_cast<const unsigned char*>("\x74\x47\x6A\x01\x6A\x00"), 6)));
+	if (!pJZ) {
+		printf( "Unable to find `74 47 6A 01 6A 00` signature.\n");
+		return;
+	}
+
+	if (!Memory::ChangeProtection(pJZ, 1, PAGE_EXECUTE_READWRITE)) {
+		printf( "Failed to change memory protection for `74 47 6A 01 6A 00` signature.\n");
+		return;
+	}
+
+	// Forces to use LoadModuleStandard. (Potential File Spam)
+	pJZ[0] = 0xEB; // jz -> jmp
+
+	if (!Memory::RestoreProtection(pJZ)) {
+		printf( "Failed to change memory protection for `74 47 6A 01 6A 00` signature.\n");
+		return;
+	}
+
+	pJZ = const_cast<unsigned char*>(reinterpret_cast<const unsigned char* const>(Scan::FindSignature(hSteamService, "\x74\x18\xE8\x2A\x2A\x2A\x2A\x6A\x2A\xFF\x76\x18\x8B\xC8\x8B\x10\xFF\x52\x2A\xC7\x46\x18\x2A\x2A\x2A\x2A\x5E")));
+	if (!pJZ) {
+		
+		printf( "Unable to find `74 18 E8 ?? ?? ?? ?? 6A ?? FF 76 18 8B C8 8B 10 FF 52 ?? C7 46 18 ?? ?? ?? ?? 5E` signature.\n");
+		return;
+	}
+
+	if (!Memory::ChangeProtection(pJZ, 1, PAGE_EXECUTE_READWRITE)) {
+		
+		printf( "Failed to patch `74 18 E8 ?? ?? ?? ?? 6A ?? FF 76 18 8B C8 8B 10 FF 52 ?? C7 46 18 ?? ?? ?? ?? 5E` signature.\n");
+
+		return;
+	}
+
+	// Forces to save RAW module in `MODULE_INFO`. (Potential Memory Leak?)
+	pJZ[0] = 0xEB; // jz -> jmp
+
+	if (!Memory::RestoreProtection(pJZ)) {
+		
+		printf( "Failed to change memory protection for `74 18 E8 ?? ?? ?? ?? 6A ?? FF 76 18 8B C8 8B 10 FF 52 ?? C7 46 18 ?? ?? ?? ?? 5E` signature.\n");
+		return;
+	}
+}
+
 /**
  * @brief Initializes MinHook and installs all required hooks.
  */
@@ -439,6 +491,8 @@ void InitHook()
 	std::cout << "[*] call_hook encontrado em: 0x" << std::hex << call_hook << std::endl;
 
 	//auto target_func = util::resolve_relative_address(reinterpret_cast<uint8_t*>(call_instr), 1, 5);
+
+	ForceLoadLibrary();
 
 	if (MH_CreateHook(reinterpret_cast<void*>(entry), &hkGetEntryPoint, reinterpret_cast<void**>(&oGetEntryPoint)) != MH_OK)
 		return;
