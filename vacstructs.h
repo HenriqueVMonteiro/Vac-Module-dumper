@@ -17,10 +17,12 @@ enum VacModuleResult_t {
 	NOT_SET = 0x0,
 	SUCCESS = 0x1,
 	ALREADY_LOADED = 0x2,
-	UKN0 = 0x5,
-	FAIL_TO_DECRYPT_VAC_MODULE = 0xb,
-	FAIL_MODULE_SIZE_NULL = 0xc,
-	UKN1 = 0xf,
+	FAIL_INITIALIZE = 0x3,
+	UKN1 = 0x4,
+	UKN2 = 0x5,
+	FAIL_TO_DECRYPT_MODULE = 0xB,
+	FAIL_MODULE_SIZE_NULL = 0xC,
+	UKN3 = 0xF,
 	FAIL_GET_MODULE_TEMP_PATH = 0x13,
 	FAIL_WRITE_MODULE = 0x15,
 	FAIL_LOAD_MODULE = 0x16,
@@ -28,25 +30,45 @@ enum VacModuleResult_t {
 	FAIL_GET_EXPORT_RUNFUNC_2 = 0x19
 };
 
+typedef struct _MODULE_HEADER {
+	IMAGE_DOS_HEADER m_DH;
+	unsigned int m_unMagic;
+	unsigned int m_unCrypt;
+	unsigned int m_unFileSize;
+	unsigned int m_unTimeStamp;
+	unsigned char m_pCryptRSASignature[0x80];
+} MODULE_HEADER, * PMODULE_HEADER;
+
 struct VacModuleCustomDosHeader_t {
 	struct _IMAGE_DOS_HEADER m_DosHeader;
 	DWORD m_ValveHeaderMagic; // 'VLV' ou 0x564C56
 	DWORD m_nIsCrypted;
-	DWORD m_nCryptedDataSize;
-	DWORD unkn0;
-	BYTE  m_CryptedRSASignature[0x80];
+	DWORD m_unFileSize;
+	unsigned int m_unTimeStamp;
+	unsigned char m_pCryptRSASignature[0x80];
 };
+
+using fnRunFunc = VacModuleResult_t(__stdcall*)(unsigned int unID, void* pInData, unsigned int unInDataSize, void* pOutData, unsigned int* pOutDataSize);
+
+typedef struct _MODULE {
+	unsigned short m_unRunFuncExportFunctionOrdinal;
+	unsigned short m_unRunFuncExportModuleOrdinal;
+	void* m_pModuleBase;
+	PIMAGE_NT_HEADERS m_pNTHs;
+	unsigned int m_unImportedLibraryCount;
+	void* m_pIAT;
+} MODULE, * PMODULE;
 
 /** Metadata for a VAC module as loaded by Steam. */
 struct VacModuleInfo_t
 {
-	DWORD m_unCRC32;
-	DWORD m_hModule;
-	struct VacModule_t* m_pModule;
+	unsigned int m_unCRC32;
+	HMODULE m_hModule;
+	PMODULE* m_pModule;
 	DWORD m_pRunFunc;
 	enum VacModuleResult_t m_nLastResult;
-	DWORD m_nModuleSize;
-	struct VacModuleCustomDosHeader_t* m_pRawModule;
+	unsigned int m_nModuleSize;
+	PMODULE_HEADER* m_pRawModule;
 	WORD unkn08;
 	BYTE m_nUnknFlag_1;
 	BYTE m_nUnknFlag_0;
@@ -89,3 +111,4 @@ typedef struct VacCtxHeader
 	uint32_t unk_ptr;         // +0x0C  <- salvo em a3[0] / v6 (tag ou callback)
 	uint8_t  encImports[160]; // +0x10  <- tabela criptografada de imports                      
 } VacCtxHeader;
+

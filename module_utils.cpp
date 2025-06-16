@@ -86,8 +86,8 @@ bool DumpVacModule(VacModuleInfo_t* m, const std::wstring& dumpDir)
 {
     BYTE* base = nullptr; size_t sz = 0;
     if (m->m_pModule) {
-        base = (BYTE*)m->m_pModule->m_pModuleBase;
-        sz = GetAllocationSize(base);
+        //base = (BYTE*)m->m_pModule->m_pModuleBase;
+       // sz = GetAllocationSize(base);
     }
     else if (m->m_hModule) {
         base = (BYTE*)m->m_hModule;
